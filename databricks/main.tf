@@ -16,6 +16,7 @@ data "databricks_current_user" "me" {}
 
 data "databricks_spark_version" "lts" {
   long_term_support = true
+  spark_version     = "3.4"    # pins to DBR 13.3 LTS — compatible with the banzaicloud JAR
 }
 
 data "databricks_node_type" "smallest" {
