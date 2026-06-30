@@ -1,8 +1,9 @@
 name: terraform-plan
 
 # Runs `terraform plan` on PRs as a status check. No changes are applied here.
+# Auth: service principal via ARM_* env vars (client-secret based).
 # NOTE: the stage-2 (workspace) plan reads stage-1's remote state, so it only
-# succeeds after stage 1 has been applied at least once via terraform-apply.
+# succeeds AFTER stage 1 has been applied at least once via terraform-apply.
 
 on:
   pull_request:
@@ -11,16 +12,18 @@ on:
       - 'docker/**'
       - 'databricks/**'
       - '.github/workflows/**'
+  workflow_dispatch: {}   # also allows manually running from the Actions tab
 
 permissions:
-  id-token: write   # required for OIDC federated login
   contents: read
 
 env:
-  ARM_CLIENT_ID:       ${{ vars.AZURE_CLIENT_ID }}
-  ARM_CLIENT_SECRET:   ${{ secrets.AZURE_CLIENT_SECRET }}
-  ARM_TENANT_ID:       ${{ vars.AZURE_TENANT_ID }}
-  ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+  ARM_CLIENT_ID:          ${{ secrets.ARM_CLIENT_ID }}
+  ARM_CLIENT_SECRET:      ${{ secrets.ARM_CLIENT_SECRET }}
+  ARM_TENANT_ID:          ${{ secrets.ARM_TENANT_ID }}
+  ARM_SUBSCRIPTION_ID:    ${{ secrets.ARM_SUBSCRIPTION_ID }}
+  TF_VAR_subscription_id: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+  TF_IN_AUTOMATION: "true"
 
 jobs:
   plan-foundation:
@@ -30,11 +33,6 @@ jobs:
         working-directory: terraform/1-foundation
     steps:
       - uses: actions/checkout@v4
-      - uses: azure/login@v2
-        with:
-          client-id: ${{ vars.AZURE_CLIENT_ID }}
-          tenant-id: ${{ vars.AZURE_TENANT_ID }}
-          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: "1.9.8"
@@ -61,11 +59,6 @@ jobs:
         working-directory: terraform/2-workspace
     steps:
       - uses: actions/checkout@v4
-      - uses: azure/login@v2
-        with:
-          client-id: ${{ vars.AZURE_CLIENT_ID }}
-          tenant-id: ${{ vars.AZURE_TENANT_ID }}
-          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: "1.9.8"

@@ -2,8 +2,9 @@ name: terraform-apply
 
 # Manual, gated apply/destroy. The 'azure-poc' environment requires reviewer
 # approval, so every run pauses for you to approve before anything changes.
-# apply  -> stage 1 (foundation) then stage 2 (workspace)
+# apply   -> stage 1 (foundation) then stage 2 (workspace)
 # destroy -> stage 2 then stage 1 (reverse order)
+# Auth: service principal via ARM_* env vars (client-secret based).
 
 on:
   workflow_dispatch:
@@ -15,14 +16,15 @@ on:
         default: apply
 
 permissions:
-  id-token: write
   contents: read
 
 env:
-  ARM_CLIENT_ID:       ${{ vars.AZURE_CLIENT_ID }}
-  ARM_CLIENT_SECRET:   ${{ secrets.AZURE_CLIENT_SECRET }}
-  ARM_TENANT_ID:       ${{ vars.AZURE_TENANT_ID }}
-  ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+  ARM_CLIENT_ID:          ${{ secrets.ARM_CLIENT_ID }}
+  ARM_CLIENT_SECRET:      ${{ secrets.ARM_CLIENT_SECRET }}
+  ARM_TENANT_ID:          ${{ secrets.ARM_TENANT_ID }}
+  ARM_SUBSCRIPTION_ID:    ${{ secrets.ARM_SUBSCRIPTION_ID }}
+  TF_VAR_subscription_id: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+  TF_IN_AUTOMATION: "true"
 
 jobs:
   terraform:
@@ -30,11 +32,6 @@ jobs:
     environment: azure-poc   # manual-approval gate
     steps:
       - uses: actions/checkout@v4
-      - uses: azure/login@v2
-        with:
-          client-id: ${{ vars.AZURE_CLIENT_ID }}
-          tenant-id: ${{ vars.AZURE_TENANT_ID }}
-          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: "1.9.8"
