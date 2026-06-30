@@ -44,8 +44,8 @@ cat >> /databricks/spark/conf/metrics.properties <<EOL
 *.sink.prometheus.enable-hostname-in-instance=true
 
 # JVM metrics source
-*.sink.jmx.class=org.apache.spark.metrics.sink.JmxSink
-*.source.jvm.class=org.apache.spark.metrics.source.JvmSource
+# *.sink.jmx.class=org.apache.spark.metrics.sink.JmxSink
+# *.source.jvm.class=org.apache.spark.metrics.source.JvmSource
 EOL
 
 echo "[init-prometheus] sink configured -> ${PROMETHEUS_HOST} (job_name=${PROMETHEUS_JOB_NAME})"
