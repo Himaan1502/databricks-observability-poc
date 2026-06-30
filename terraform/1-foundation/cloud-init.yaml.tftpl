@@ -1,0 +1,31 @@
+#cloud-config
+# Renders the real docker/ files (base64-injected by Terraform), installs
+# Docker, and brings the monitoring stack up on first boot.
+package_update: true
+
+write_files:
+  - path: /opt/dbx-obs/docker/docker-compose.yml
+    encoding: b64
+    permissions: '0644'
+    content: ${compose}
+  - path: /opt/dbx-obs/docker/config/prometheus.yml
+    encoding: b64
+    permissions: '0644'
+    content: ${prometheus}
+  - path: /opt/dbx-obs/docker/config/grafana/datasources/prometheus.yaml
+    encoding: b64
+    permissions: '0644'
+    content: ${datasource}
+  - path: /opt/dbx-obs/docker/config/grafana/dashboards/dashboards.yaml
+    encoding: b64
+    permissions: '0644'
+    content: ${dash_provider}
+  - path: /opt/dbx-obs/docker/config/grafana/dashboards/spark-databricks-overview.json
+    encoding: b64
+    permissions: '0644'
+    content: ${dashboard}
+
+runcmd:
+  - [ bash, -c, "curl -fsSL https://get.docker.com | sh" ]
+  - [ bash, -c, "usermod -aG docker azureuser || true" ]
+  - [ bash, -c, "cd /opt/dbx-obs/docker && docker compose up -d" ]

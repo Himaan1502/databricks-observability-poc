@@ -1,0 +1,35 @@
+# ---- Terraform ----
+# State contains secrets in plaintext – NEVER commit it.
+*.tfstate
+*.tfstate.*
+*.tfstate.backup
+crash.log
+crash.*.log
+
+# Provider plugins / lock dirs
+.terraform/
+.terraform.lock.hcl   # optional: remove this line if you want to pin provider hashes in CI
+
+# Variable files (may contain subscription ids, IPs); keep the .example files
+terraform.tfvars
+*.auto.tfvars
+backend.hcl
+
+# Plan artifacts
+*.tfplan
+tfplan
+
+# ---- Secrets / local config ----
+databricks/.env
+*.pem
+id_rsa
+id_rsa.pub          # commit a *dedicated* CI pubkey explicitly if you want; not your personal key
+
+# ---- The sink jar (binary; fetched in CI from upstream release) ----
+databricks/lib/*.jar
+
+# ---- OS / editor noise ----
+.DS_Store
+*.swp
+.idea/
+.vscode/

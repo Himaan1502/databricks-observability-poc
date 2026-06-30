@@ -1,0 +1,15 @@
+# Copy to terraform.tfvars and edit.
+
+subscription_id = "00000000-0000-0000-0000-000000000000"
+
+# Your public IP for SSH (run: curl ifconfig.me), as /32
+admin_source_ip = "203.0.113.10/32"
+
+# Path to your SSH *public* key
+ssh_public_key_path = "~/.ssh/id_rsa.pub"
+
+# Optional overrides
+# location            = "Central India"
+# prefix              = "dbxobs"
+# resource_group_name = "rg-dbx-observability-poc"
+# vm_size             = "Standard_B2s"

@@ -1,0 +1,13 @@
+global:
+  scrape_interval: 5s        # demo-fast; raise to 15-30s for real use
+  evaluation_interval: 5s
+
+scrape_configs:
+  # Pushgateway is the single scrape target. Databricks clusters PUSH their
+  # Spark/JVM metrics into Pushgateway; Prometheus PULLS them from here.
+  - job_name: 'pushgateway'
+    honor_labels: true       # keep the job/instance labels the pusher set
+    honor_timestamps: true
+    metrics_path: '/metrics'
+    static_configs:
+      - targets: ['pushgateway:9091']

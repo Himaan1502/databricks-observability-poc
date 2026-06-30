@@ -1,0 +1,5 @@
+# Copy to backend.hcl and fill in (created by the bootstrap step).
+# Usage:  terraform init -backend-config=backend.hcl
+resource_group_name  = "rg-tfstate"
+storage_account_name = "sttfstatedbxobs"
+container_name       = "tfstate"

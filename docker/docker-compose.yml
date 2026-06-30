@@ -1,0 +1,77 @@
+# Databricks observability POC – local monitoring stack
+#
+# Core (this POC):   Pushgateway -> Prometheus -> Grafana
+# Optional (APM):    Pyroscope (uncomment the block at the bottom; see blog "part 2")
+#
+# Start:   docker compose up -d
+# Stop:    docker compose down            (add -v to also wipe Grafana/Prometheus volumes)
+#
+# Ports exposed on the host running this stack:
+#   9091  Pushgateway   (Databricks clusters push Spark metrics here)
+#   9090  Prometheus    (scrapes Pushgateway; expression browser)
+#   3000  Grafana       (dashboards; default login admin / admin)
+#
+# IMPORTANT: the Databricks cluster must be able to reach this host on :9091.
+# In a real workspace use VNet/VPC injection or VNet peering so the cluster
+# subnet can route to this VM. For a laptop demo, the cluster cannot reach
+# "localhost" – use a reachable private IP / tunnel.
+
+services:
+  pushgateway:
+    image: prom/pushgateway:latest
+    container_name: dbx-obs-pushgateway
+    # --web.enable-admin-api lets us wipe stale metric groups left behind by
+    # ephemeral jobs:  curl -X PUT http://<host>:9091/api/v1/admin/wipe
+    command: --web.enable-admin-api
+    ports:
+      - '9091:9091'
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: dbx-obs-prometheus
+    ports:
+      - '9090:9090'
+    volumes:
+      - ./config/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=7d
+    depends_on:
+      - pushgateway
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: dbx-obs-grafana
+    ports:
+      - '3000:3000'
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      # Datasource + dashboards are provisioned automatically on first boot.
+      - ./config/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./config/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+  # ---- Optional: Pyroscope for continuous profiling (APM) -------------------
+  # The companion init script (init-pyroscope.sh) and the spark.plugins /
+  # spark.pyroscope.* cluster settings push flame-graph data here.
+  # Uncomment to enable, then point TF_VAR_pyroscope_host at <host>:4040.
+  #
+  # pyroscope:
+  #   image: grafana/pyroscope:latest
+  #   container_name: dbx-obs-pyroscope
+  #   ports:
+  #     - '4040:4040'
+  #   restart: unless-stopped
+
+volumes:
+  prometheus-data:
+  grafana-data:

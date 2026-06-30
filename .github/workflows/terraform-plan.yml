@@ -1,0 +1,86 @@
+name: terraform-plan
+
+# Runs `terraform plan` on PRs as a status check. No changes are applied here.
+# NOTE: the stage-2 (workspace) plan reads stage-1's remote state, so it only
+# succeeds after stage 1 has been applied at least once via terraform-apply.
+
+on:
+  pull_request:
+    paths:
+      - 'terraform/**'
+      - 'docker/**'
+      - 'databricks/**'
+      - '.github/workflows/**'
+
+permissions:
+  id-token: write   # required for OIDC federated login
+  contents: read
+
+env:
+  ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+  TF_VAR_subscription_id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+  TF_IN_AUTOMATION: "true"
+
+jobs:
+  plan-foundation:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: terraform/1-foundation
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.8"
+      - name: Write CI SSH public key
+        run: echo "${{ vars.SSH_PUBLIC_KEY }}" > ci_id_rsa.pub
+      - name: Init
+        run: |
+          terraform init \
+            -backend-config="resource_group_name=${{ vars.TF_STATE_RG }}" \
+            -backend-config="storage_account_name=${{ vars.TF_STATE_SA }}" \
+            -backend-config="container_name=${{ vars.TF_STATE_CONTAINER }}"
+      - name: Validate
+        run: terraform validate
+      - name: Plan
+        env:
+          TF_VAR_admin_source_ip: ${{ vars.ADMIN_SOURCE_IP }}
+          TF_VAR_ssh_public_key_path: ci_id_rsa.pub
+        run: terraform plan -input=false -no-color
+
+  plan-workspace:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: terraform/2-workspace
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.8"
+      - name: Fetch sink jar
+        run: curl -fL -o "$GITHUB_WORKSPACE/databricks/lib/spark_metrics.jar" https://github.com/rayalex/spark-databricks-observability/raw/main/lib/spark-metrics-assembly-3.5-1.3.0.jar
+      - name: Init
+        run: |
+          terraform init \
+            -backend-config="resource_group_name=${{ vars.TF_STATE_RG }}" \
+            -backend-config="storage_account_name=${{ vars.TF_STATE_SA }}" \
+            -backend-config="container_name=${{ vars.TF_STATE_CONTAINER }}"
+      - name: Validate
+        run: terraform validate
+      - name: Plan
+        env:
+          TF_VAR_state_resource_group_name: ${{ vars.TF_STATE_RG }}
+          TF_VAR_state_storage_account_name: ${{ vars.TF_STATE_SA }}
+          TF_VAR_state_container_name: ${{ vars.TF_STATE_CONTAINER }}
+        run: terraform plan -input=false -no-color

@@ -1,0 +1,101 @@
+name: terraform-apply
+
+# Manual, gated apply/destroy. The 'azure-poc' environment requires reviewer
+# approval, so every run pauses for you to approve before anything changes.
+# apply  -> stage 1 (foundation) then stage 2 (workspace)
+# destroy -> stage 2 then stage 1 (reverse order)
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "apply or destroy"
+        type: choice
+        options: [apply, destroy]
+        default: apply
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+  TF_VAR_subscription_id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+  TF_IN_AUTOMATION: "true"
+
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+    environment: azure-poc   # manual-approval gate
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.8"
+
+      - name: Write CI SSH public key
+        run: echo "${{ vars.SSH_PUBLIC_KEY }}" > terraform/1-foundation/ci_id_rsa.pub
+
+      - name: Fetch sink jar
+        run: curl -fL -o databricks/lib/spark_metrics.jar https://github.com/rayalex/spark-databricks-observability/raw/main/lib/spark-metrics-assembly-3.5-1.3.0.jar
+
+      # ----------------- APPLY (forward order) -----------------
+      - name: Apply foundation
+        if: ${{ inputs.action == 'apply' }}
+        working-directory: terraform/1-foundation
+        env:
+          TF_VAR_admin_source_ip: ${{ vars.ADMIN_SOURCE_IP }}
+          TF_VAR_ssh_public_key_path: ci_id_rsa.pub
+        run: |
+          terraform init \
+            -backend-config="resource_group_name=${{ vars.TF_STATE_RG }}" \
+            -backend-config="storage_account_name=${{ vars.TF_STATE_SA }}" \
+            -backend-config="container_name=${{ vars.TF_STATE_CONTAINER }}"
+          terraform apply -input=false -auto-approve
+
+      - name: Apply workspace
+        if: ${{ inputs.action == 'apply' }}
+        working-directory: terraform/2-workspace
+        env:
+          TF_VAR_state_resource_group_name: ${{ vars.TF_STATE_RG }}
+          TF_VAR_state_storage_account_name: ${{ vars.TF_STATE_SA }}
+          TF_VAR_state_container_name: ${{ vars.TF_STATE_CONTAINER }}
+        run: |
+          terraform init \
+            -backend-config="resource_group_name=${{ vars.TF_STATE_RG }}" \
+            -backend-config="storage_account_name=${{ vars.TF_STATE_SA }}" \
+            -backend-config="container_name=${{ vars.TF_STATE_CONTAINER }}"
+          terraform apply -input=false -auto-approve
+
+      # ----------------- DESTROY (reverse order) -----------------
+      - name: Destroy workspace
+        if: ${{ inputs.action == 'destroy' }}
+        working-directory: terraform/2-workspace
+        env:
+          TF_VAR_state_resource_group_name: ${{ vars.TF_STATE_RG }}
+          TF_VAR_state_storage_account_name: ${{ vars.TF_STATE_SA }}
+          TF_VAR_state_container_name: ${{ vars.TF_STATE_CONTAINER }}
+        run: |
+          terraform init \
+            -backend-config="resource_group_name=${{ vars.TF_STATE_RG }}" \
+            -backend-config="storage_account_name=${{ vars.TF_STATE_SA }}" \
+            -backend-config="container_name=${{ vars.TF_STATE_CONTAINER }}"
+          terraform destroy -input=false -auto-approve
+
+      - name: Destroy foundation
+        if: ${{ inputs.action == 'destroy' }}
+        working-directory: terraform/1-foundation
+        env:
+          TF_VAR_admin_source_ip: ${{ vars.ADMIN_SOURCE_IP }}
+          TF_VAR_ssh_public_key_path: ci_id_rsa.pub
+        run: |
+          terraform init \
+            -backend-config="resource_group_name=${{ vars.TF_STATE_RG }}" \
+            -backend-config="storage_account_name=${{ vars.TF_STATE_SA }}" \
+            -backend-config="container_name=${{ vars.TF_STATE_CONTAINER }}"
+          terraform destroy -input=false -auto-approve

@@ -1,0 +1,139 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "refresh": "10s",
+  "schemaVersion": 39,
+  "tags": ["databricks", "spark", "prometheus"],
+  "templating": {
+    "list": [
+      {
+        "name": "job_name",
+        "label": "Job name",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "query": "label_values(job_name)",
+        "refresh": 2,
+        "includeAll": true,
+        "multi": true,
+        "allValue": ".+",
+        "current": { "text": "All", "value": "$__all" },
+        "sort": 1
+      }
+    ]
+  },
+  "time": { "from": "now-1h", "to": "now" },
+  "timepicker": {},
+  "timezone": "",
+  "title": "Databricks / Spark – Overview",
+  "uid": "dbx-spark-overview",
+  "version": 1,
+  "panels": [
+    {
+      "type": "row",
+      "title": "Pipeline health (confirms metrics are flowing)",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "type": "stat",
+      "title": "Pushgateway scrape up",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 5, "w": 6, "x": 0, "y": 1 },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "type": "value", "options": { "0": { "text": "DOWN", "color": "red" }, "1": { "text": "UP", "color": "green" } } }
+          ],
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null }, { "color": "green", "value": 1 } ] }
+        },
+        "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none" },
+      "targets": [ { "refId": "A", "expr": "up{job=\"pushgateway\"}" } ]
+    },
+    {
+      "type": "stat",
+      "title": "Distinct Spark series received",
+      "description": "Number of metric series carrying a job_name label. >0 means the sink is pushing.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 5, "w": 6, "x": 6, "y": 1 },
+      "fieldConfig": {
+        "defaults": { "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null }, { "color": "green", "value": 1 } ] } },
+        "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "graphMode": "area" },
+      "targets": [ { "refId": "A", "expr": "count({job_name=~\"$job_name\"})" } ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Seconds since last push (per group)",
+      "description": "Freshness of pushed metrics. Spikes that never recover usually mean a job ended and its group is now stale in Pushgateway.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 5, "w": 12, "x": 12, "y": 1 },
+      "fieldConfig": { "defaults": { "unit": "s", "custom": { "drawStyle": "line", "fillOpacity": 10 } }, "overrides": [] },
+      "targets": [ { "refId": "A", "expr": "time() - push_time_seconds", "legendFormat": "{{job}} / {{instance}}" } ]
+    },
+    {
+      "type": "row",
+      "title": "JVM",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 6 },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "JVM heap used vs max",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 7 },
+      "fieldConfig": { "defaults": { "unit": "bytes", "custom": { "drawStyle": "line", "fillOpacity": 10 } }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "jvm_heap_used{job_name=~\"$job_name\"}", "legendFormat": "used – {{instance}}" },
+        { "refId": "B", "expr": "jvm_heap_max{job_name=~\"$job_name\"}", "legendFormat": "max – {{instance}}" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "GC collections / sec",
+      "description": "Permissive matcher – works across MarkSweep / Scavenge / G1 collectors.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 7 },
+      "fieldConfig": { "defaults": { "unit": "ops", "custom": { "drawStyle": "line", "fillOpacity": 10 } }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "sum by (instance) (rate({__name__=~\"jvm_.*(MarkSweep|Scavenge|G1).*count\", job_name=~\"$job_name\"}[1m]))", "legendFormat": "{{instance}}" }
+      ]
+    },
+    {
+      "type": "row",
+      "title": "Spark execution  (verify metric names in Explore – see README)",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 15 },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "DAGScheduler – active jobs / running stages",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "fieldConfig": { "defaults": { "custom": { "drawStyle": "line", "fillOpacity": 10 } }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "{__name__=~\"DAGScheduler_.*(activeJobs|runningStages)\", job_name=~\"$job_name\"}", "legendFormat": "{{__name__}}" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "BlockManager – memory used",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "fieldConfig": { "defaults": { "custom": { "drawStyle": "line", "fillOpacity": 10 } }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "{__name__=~\"BlockManager_memory_memUsed.*\", job_name=~\"$job_name\"}", "legendFormat": "{{__name__}} – {{instance}}" }
+      ]
+    }
+  ]
+}
